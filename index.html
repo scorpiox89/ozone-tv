@@ -175,8 +175,8 @@
   /* logo at the top of the box */
   .hashcard .logo-img {
     display:block;
-    max-width:66%; max-height:34%;
-    width:auto; height:auto; object-fit:contain;
+    width:82%; height:auto;          /* explicit width → always large */
+    max-height:46%;
   }
   /* wordmark fallback if the logo image fails to load */
   .hashcard .logo {
@@ -519,7 +519,7 @@ function placeLogoBox() {
   const cellW = W / GRID.COLS, cellH = H / GRID.ROWS;
   const bx = LOGO_CELL.c * cellW, by = LOGO_CELL.r * cellH;
   const bw = LOGO_CELL.w * cellW, bh = LOGO_CELL.h * cellH;
-  const cw = bw * 0.80, ch = Math.min(bh * 0.92, cw * 0.52);   // taller — fits logo + motto
+  const cw = bw * 0.82, ch = Math.min(bh * 0.84, cw * 0.46);   // tighter so logo + motto fill it
   logoBox.style.width  = cw + "px";
   logoBox.style.height = ch + "px";
   logoBox.style.left   = (bx + (bw - cw) / 2) + "px";
