@@ -51,13 +51,13 @@
     background:var(--wall);
   }
 
-  /* faint hexagon texture, like the mockups */
+  /* honeycomb hexagon texture, like the reference */
   #wall {
     position:absolute; inset:0;
     background-color:var(--wall);
     background-image:
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'><path d='M28 0L56 16v33L28 65 0 49V16z' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='1'/><path d='M28 66L56 82v33L28 131 0 115V82z' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='1'/></svg>");
-    background-size:56px 100px;
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='27.71' height='48' viewBox='0 0 27.71 48'><g fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='1'><path d='M13.86 -16L27.71 -8L27.71 8L13.86 16L0 8L0 -8Z'/><path d='M0 8L13.86 16L13.86 32L0 40L-13.86 32L-13.86 16Z'/><path d='M27.71 8L41.57 16L41.57 32L27.71 40L13.86 32L13.86 16Z'/><path d='M13.86 32L27.71 40L27.71 56L13.86 64L0 56L0 40Z'/></g></svg>");
+    background-size:38px 66px;          /* honeycomb scale */
   }
 
   /* one rotating screen of tiles */
@@ -91,72 +91,100 @@
   }
 
   /* recessed background tiles: dark image, but the label stays readable */
-  .tile.bg .media img, .tile.bg .media video { filter:brightness(0.5); }
+  .tile.bg .media img, .tile.bg .media video { filter:brightness(0.62); }
   .tile.bg .media::after {
     content:""; position:absolute; inset:0;
-    background:rgba(28,30,33,0.50);
+    background:rgba(28,30,33,0.40);
   }
 
   /* @handle + time-ago rendered as TWO detached dark chips, like the mockups:
      [IG @ozonefc.uz] on the image's bottom-left, and a separate [Xw / ago]
      box floating to its right in the dark gap. */
+  /* the whole badge is sized in em; its font-size is set per tile in JS so the
+     caption + date boxes scale with the post they belong to */
   .badge {
     position:absolute;
-    left:0; bottom:7%;
-    display:flex; align-items:center;
+    left:0; bottom:6%;
+    display:flex; align-items:stretch;
+    gap:0.32em;                       /* fixed gap → the two chips never drift apart */
     background:transparent;
     pointer-events:none;
+    font-size:14px;                   /* overridden inline, relative to post size */
   }
   .badge .chip {
     background:var(--badge-bg);
     display:flex; align-items:center;
-    padding:9px 14px;
+    padding:0.5em 0.72em;
   }
-  .badge .handle-chip svg { width:26px; height:26px; flex:none; }
+  .badge .handle-chip svg { width:1.4em; height:1.4em; flex:none; }
   .badge .handle-chip .handle {
     color:var(--text); font-weight:800;
-    font-size:clamp(11px, 0.95vw, 20px);
-    white-space:nowrap; letter-spacing:0.2px; margin-left:10px;
+    font-size:1em; white-space:nowrap; letter-spacing:0.2px; margin-left:0.55em;
   }
   .badge .time-chip {
-    margin-left:auto;                /* pushes the time box to the far right */
-    flex-direction:column; align-items:flex-end;
+    flex-direction:column; align-items:flex-end; justify-content:center;
     line-height:1.0;
   }
   .badge .time-chip .n {
     color:var(--text); font-weight:700;
-    font-size:clamp(12px, 0.95vw, 20px); white-space:nowrap;
+    font-size:1em; white-space:nowrap;
   }
   .badge .time-chip .u {
     color:var(--text); font-weight:400;
-    font-size:clamp(10px, 0.78vw, 16px); opacity:0.85; margin-top:2px;
+    font-size:0.72em; opacity:0.85; margin-top:0.15em;
   }
 
   /* logo box */
   .hashcard {
     position:absolute;
-    border:2px solid var(--lime);     /* thinner lines */
-    background:var(--card);
-    display:flex; align-items:center; justify-content:center;  /* centre the logo */
-    padding:0 36px;
+    border:1px solid var(--lime);     /* slim frame */
+    background-color:var(--card);
+    /* same honeycomb as the wall (pattern taken from the background) */
+    background-image:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='27.71' height='48' viewBox='0 0 27.71 48'><g fill='none' stroke='%23ffffff' stroke-opacity='0.06' stroke-width='1'><path d='M13.86 -16L27.71 -8L27.71 8L13.86 16L0 8L0 -8Z'/><path d='M0 8L13.86 16L13.86 32L0 40L-13.86 32L-13.86 16Z'/><path d='M27.71 8L41.57 16L41.57 32L27.71 40L13.86 32L13.86 16Z'/><path d='M13.86 32L27.71 40L27.71 56L13.86 64L0 56L0 40Z'/></g></svg>");
+    background-size:38px 66px;
+    /* space-evenly makes the gap above the logo, between logo & motto,
+       and below the motto all identical */
+    display:flex; flex-direction:column; align-items:center; justify-content:space-evenly;
+    padding:0 22px;
     z-index:60;
-    box-shadow:0 0 25px rgba(0,0,0,0.55);   /* x:0 y:0 blur:25 */
-    opacity:0; transform:scale(0.97);
-    animation:pop 0.9s ease forwards;
+    box-shadow:0 0 25px rgba(0,0,0,0.55);   /* x:0 y:0 blur:25 — static, no fade */
   }
-  /* built-in ozonefc wordmark (fallback if the logo image fails to load) */
-  .hashcard .logo {
-    font-weight:800; letter-spacing:-1px;
-    font-size:clamp(34px, 3.8vw, 80px);
-    line-height:1; color:#fff;
+  /* motto inside the box — ITC Avant Garde Gothic Pro Demi, all lowercase.
+     Drop the font file (named AvantGarde-Demi.*) next to index.html and it
+     is used automatically; until then a close geometric fallback shows. */
+  @font-face {
+    font-family:'ITC Avant Garde Gothic Pro';
+    src:url('AvantGarde-Demi.woff2') format('woff2'),
+        url('AvantGarde-Demi.woff')  format('woff'),
+        url('AvantGarde-Demi.otf')   format('opentype'),
+        url('AvantGarde-Demi.ttf')   format('truetype');
+    font-weight:600; font-style:normal; font-display:swap;
   }
-  .hashcard .logo .o,
-  .hashcard .logo .fc { color:var(--lime); }   /* corporate lime accents */
-  /* your uploaded logo image */
+  .hashcard .motto {
+    display:inline-block;
+    font-family:'ITC Avant Garde Gothic Pro','Century Gothic','Futura',sans-serif;
+    font-weight:600;
+    text-transform:lowercase;
+    color:#fff;
+    letter-spacing:0.3px;
+    line-height:1;
+    white-space:nowrap;
+    font-size:clamp(13px, 1.5vw, 32px);   /* tagline under the logo */
+  }
+  /* logo at the top of the box */
   .hashcard .logo-img {
-    max-width:82%; max-height:74%;
+    display:block;
+    max-width:62%; max-height:48%;
     width:auto; height:auto; object-fit:contain;
   }
+  /* wordmark fallback if the logo image fails to load */
+  .hashcard .logo {
+    font-weight:800; letter-spacing:-1px;
+    font-size:clamp(24px, 2.6vw, 52px); line-height:1; color:#fff;
+  }
+  .hashcard .logo .o,
+  .hashcard .logo .fc { color:var(--lime); }
 
   /* tiny status note (only while loading / on error) */
   #status {
@@ -193,8 +221,9 @@ const CONFIG = {
   ROTATE_MS:         15000,         // change screen every 15s
   DAYS_WINDOW:       90,            // only posts from the last N days
   REFRESH_MIN:       60,            // re-pull the feed every N minutes (fresh posts + URLs)
-  SHOW_LOGO_CARD:    true,          // show the lime-bordered logo box on the right
-  LOGO_URL:          "logo.png",    // path/URL to your logo image; blank = built-in ozonefc wordmark
+  SHOW_LOGO_CARD:    true,          // show the lime-bordered box on the right
+  LOGO_URL:          "logo.png",    // logo shown at the top of the box
+  MOTTO:             "atmosphere for you",  // motto at the bottom (ITC Avant Garde, lowercase)
 };
 
 /* =====================================================================
@@ -302,6 +331,10 @@ function shuffle(a) {
 }
 const rand = (min, max) => min + Math.random() * (max - min);
 
+// fixed layout grid, so the static logo box always lines up with the cells
+const GRID = { COLS: 6, ROWS: 3 };
+const LOGO_CELL = { c: GRID.COLS - 2, r: 1, w: 2, h: 1 };   // 2-wide block, mid-right
+
 /* =====================================================================
    4) LAYOUT — scatter tiles over a jittered grid so they spread out
       but still overlap & vary like the mockups
@@ -312,51 +345,71 @@ function buildStage(posts) {
   const stage = document.createElement("div");
   stage.className = "stage";
 
-  /* ---- non-overlapping cell grid ----------------------------------
-     6 cols x 2 rows = 12 cells. Each post lives inside ONE cell and
-     never leaves it, so no two posts can overlap. The logo box claims
-     a 2-cell block on the right; that leaves exactly 10 post cells.   */
-  // grid adapts to however many posts the feed returns (+2 cells for the logo)
-  const ROWS = 2;
-  const COLS = Math.max(3, Math.ceil((posts.length + 2) / ROWS));
+  /* ---- spanning grid (varied sizes, no overlap) -------------------
+     A COLS x ROWS occupancy grid. Most posts take one cell; a few take
+     a 2x2 / 1x2 block so some come out much larger, like the mockups.
+     The logo box permanently owns a 2-cell block (mid-right).         */
+  const { COLS, ROWS } = GRID;
   const cellW = W / COLS, cellH = H / ROWS;
 
-  // 2-cell block for the logo box — FIXED position (lower centre-right)
-  const logoRow  = 1;                        // constant, so the box never moves
-  const logoCol  = COLS - 2;                 // rightmost two cells of that row
-  const reserved = new Set([logoRow * COLS + logoCol, logoRow * COLS + logoCol + 1]);
+  const occ = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  for (let dr = 0; dr < LOGO_CELL.h; dr++)
+    for (let dc = 0; dc < LOGO_CELL.w; dc++)
+      occ[LOGO_CELL.r + dr][LOGO_CELL.c + dc] = true;     // reserve the logo block
 
-  // the remaining cells, shuffled, become the post slots
-  const slots = [];
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++) {
-      const id = r * COLS + c;
-      if (!reserved.has(id)) slots.push({ c, r });
-    }
-  const order = shuffle(slots);
+  const freeSpots = (sw, sh) => {
+    const out = [];
+    for (let r = 0; r + sh <= ROWS; r++)
+      for (let c = 0; c + sw <= COLS; c++) {
+        let ok = true;
+        for (let dr = 0; dr < sh && ok; dr++)
+          for (let dc = 0; dc < sw; dc++) if (occ[r + dr][c + dc]) { ok = false; break; }
+        if (ok) out.push({ r, c });
+      }
+    return out;
+  };
+  const take = (r, c, sw, sh) => {
+    for (let dr = 0; dr < sh; dr++) for (let dc = 0; dc < sw; dc++) occ[r + dr][c + dc] = true;
+  };
 
-  // dimmed "background" tiles sit in the OUTER columns, like the references
-  const edge = [];
-  order.forEach((cell, i) => { if (cell.c === 0 || cell.c === COLS - 1) edge.push(i); });
-  const bgSet = new Set(shuffle(edge).slice(0, Math.min(3, edge.length)));
+  // size recipe: a couple of large / tall feature tiles, the rest single-cell
+  const capacity = COLS * ROWS - LOGO_CELL.w * LOGO_CELL.h;
+  const n = Math.min(posts.length, capacity);
+  // consistent feature set each slide (less random): one large + two tall, rest single
+  const spans = [[2,2],[1,2],[1,2]];
+  while (spans.length < n) spans.push([1,1]);
+  spans.length = n;
 
-  // let one or two foreground reels bleed off the top/bottom, like the mockup
-  const fg = [];
-  for (let i = 0; i < posts.length && i < order.length; i++) if (!bgSet.has(i)) fg.push(i);
-  const bleedSet = new Set(shuffle(fg).slice(0, 2));
+  // place feature tiles first so they fit; pick a random valid spot for variety
+  const placed = [];
+  for (let i = 0; i < n; i++) {
+    let [sw, sh] = spans[i];
+    let spots = freeSpots(sw, sh);
+    if (!spots.length) { sw = 1; sh = 1; spots = freeSpots(1, 1); }   // downgrade if it won't fit
+    if (!spots.length) break;                                        // grid full
+    const s = spots[(Math.random() * spots.length) | 0];
+    take(s.r, s.c, sw, sh);
+    placed.push({ post: posts[i], r: s.r, c: s.c, sw, sh });
+  }
 
-  posts.slice(0, order.length).forEach((post, i) => {
-    const cell = order[i];
+  // recessed (dim) tiles — prefer ones touching the outer columns
+  const edgeIdx = placed.map((_, i) => i).filter(i => placed[i].c === 0 || placed[i].c + placed[i].sw === COLS);
+  const bgSet = new Set(shuffle(edgeIdx.length ? edgeIdx : placed.map((_, i) => i)).slice(0, 2));
+  // foreground tiles that bleed off the top/bottom (must touch that edge)
+  const edgeY = placed.map((_, i) => i).filter(i => !bgSet.has(i) && (placed[i].r === 0 || placed[i].r + placed[i].sh === ROWS));
+  const bleedSet = new Set(shuffle(edgeY).slice(0, 2));
+
+  placed.forEach((pl, i) => {
+    const { post, r, c, sw, sh } = pl;
     const isBg = bgSet.has(i);
     const tile = document.createElement("div");
     tile.className = "tile" + (isBg ? " bg" : "");
-
-    tile.style.zIndex  = isBg ? "2" : "10";
+    tile.style.zIndex = isBg ? "2" : "10";
     tile.style.animationDelay = (i * 0.05) + "s";
 
     // media wrapper (sharp corners, clipped)
-    const box = document.createElement("div");
-    box.className = "media";
+    const mbox = document.createElement("div");
+    mbox.className = "media";
     let media;
     if (post.type === "video") {
       media = document.createElement("video");
@@ -371,10 +424,10 @@ function buildStage(posts) {
       media.src = post.src;
       media.loading = "eager";
     }
-    box.appendChild(media);
-    tile.appendChild(box);
+    mbox.appendChild(media);
+    tile.appendChild(mbox);
 
-    // @handle chip (bottom-left) + detached time chip floating to its right
+    // labels: handle chip + time chip, kept together so they never split
     const ago = timeAgo(post.time);
     const badge = document.createElement("div");
     badge.className = "badge";
@@ -383,41 +436,36 @@ function buildStage(posts) {
       `<span class="chip time-chip"><span class="n">${ago.n}</span>${ago.u ? `<span class="u">${ago.u}</span>` : ""}</span>`;
     tile.appendChild(badge);
 
-    // ---- size & place the tile for a given aspect ratio (w/h) -------------
-    // Foreground stays fully in-frame; recessed bg tiles bleed off the sides;
-    // selected foreground reels bleed off the top/bottom (the mockup look).
-    const cellX = cell.c * cellW, cellY = cell.r * cellH;
-    const pad   = isBg ? 0.96 : 0.86;
-    const scale = rand(isBg ? 0.92 : 0.74, isBg ? 1.0 : 0.98);
-    const jX = Math.random(), jY = Math.random();        // stable jitter (no jump on refit)
-    const bX = isBg ? (cell.c === 0 ? rand(0.18, 0.40)
-                     : cell.c === COLS-1 ? rand(0.60, 0.82) : 0) : 0;
-    const bY = bleedSet.has(i) ? (cell.r === 0 ? rand(0.12, 0.30) : rand(0.70, 0.88)) : 0;
+    // the block this tile occupies, then fit the media to its TRUE aspect ratio
+    const bx = c * cellW, by = r * cellH, bw = sw * cellW, bh = sh * cellH;
+    const pad    = isBg ? 0.98 : 0.90;     // consistent gap → structured, less random
+    const touchL = c === 0, touchR = c + sw === COLS;
+    const bX = isBg ? (touchL ? rand(0.12, 0.26) : touchR ? rand(0.72, 0.88) : 0) : 0;
+    const bY = bleedSet.has(i) ? (r === 0 ? rand(0.10, 0.22) : rand(0.78, 0.92)) : 0;
 
     function fit(aspect) {
-      let tw = cellW * pad, th = tw / aspect;
-      if (th > cellH * pad) { th = cellH * pad; tw = th * aspect; }
-      tw *= scale; th *= scale;
+      let tw = bw * pad, th = tw / aspect;
+      if (th > bh * pad) { th = bh * pad; tw = th * aspect; }
 
       let left;
-      if (isBg && cell.c === 0)            left = -tw * bX;                 // off left
-      else if (isBg && cell.c === COLS-1) left =  W - tw * bX;             // off right
-      else  left = Math.max(0, Math.min(cellX + jX * Math.max(0, cellW - tw), W - tw));
+      if (isBg && touchL)      left = -tw * bX;                          // bleed off left
+      else if (isBg && touchR) left =  W - tw * bX;                      // bleed off right
+      else  left = Math.max(0, Math.min(bx + (bw - tw) / 2, W - tw));    // centred in block
 
       let top;
-      if (bY) top = (cell.r === 0) ? -th * bY : H - th * bY;              // bleed off top/bottom
-      else    top = Math.max(0, Math.min(cellY + jY * Math.max(0, cellH - th), H - th));
+      if (bY) top = (r === 0) ? -th * bY : H - th * bY;                  // bleed off top/bottom
+      else    top = Math.max(0, Math.min(by + (bh - th) / 2, H - th));   // centred in block
 
       tile.style.width  = tw + "px";
       tile.style.height = th + "px";
       tile.style.left   = left + "px";
       tile.style.top    = top + "px";
-      const cellRight = (cell.c + 1) * cellW - 4;
-      badge.style.width = Math.max(tw, Math.min(cellRight - left, W - left)) + "px";
+      // caption + date boxes scale with the post size
+      badge.style.fontSize = Math.max(8, Math.min(tw * 0.085, 22)) + "px";
     }
-    fit(post.aspect);   // first guess from data (or default)
+    fit(post.aspect);
 
-    // correct to the media's TRUE aspect ratio once it loads (so nothing crops)
+    // correct to the media's true aspect ratio once it loads (so nothing crops)
     const onMeta = () => {
       const aw = media.naturalWidth  || media.videoWidth;
       const ah = media.naturalHeight || media.videoHeight;
@@ -428,43 +476,69 @@ function buildStage(posts) {
     stage.appendChild(tile);
   });
 
-  // logo box in its reserved 2-cell block (always visible; wordmark fallback)
-  if (CONFIG.SHOW_LOGO_CARD) {
-    const card = document.createElement("div");
-    card.className = "hashcard";
+  return stage;
+}
 
-    const addWordmark = () => {
+/* The logo box is a PERSISTENT element (created once) so it never fades or
+   rebuilds when the slides change — it sits above the rotating stages. */
+let logoBox = null;
+function ensureLogoBox() {
+  if (logoBox || !CONFIG.SHOW_LOGO_CARD) return;
+  const card = document.createElement("div");
+  card.className = "hashcard";
+
+  // logo on top (wordmark fallback if the image is missing)
+  if (CONFIG.LOGO_URL) {
+    const img = document.createElement("img");
+    img.className = "logo-img";
+    img.src = CONFIG.LOGO_URL; img.alt = "logo";
+    img.onerror = () => {
+      img.remove();
       const wm = document.createElement("span");
       wm.className = "logo";
       wm.innerHTML = `<span class="o">o</span>zone<span class="fc">fc</span>`;
-      card.appendChild(wm);
+      card.insertBefore(wm, card.firstChild);
+      syncBoxWidths();
     };
-    if (CONFIG.LOGO_URL) {
-      const img = document.createElement("img");
-      img.className = "logo-img";
-      img.src = CONFIG.LOGO_URL;
-      img.alt = "logo";
-      img.onerror = () => { img.remove(); addWordmark(); };  // file missing → wordmark
-      card.appendChild(img);
-    } else {
-      addWordmark();
-    }
-
-    // place the card on the right, hugging the screen's vertical centre line
-    const blockX = logoCol * cellW;
-    const blockW = 2 * cellW, blockH = cellH;
-    const cw = blockW * 0.92, ch = Math.min(blockH * 0.55, cw * 0.38);
-    const m  = cellH * 0.06;
-    card.style.width  = cw + "px";
-    card.style.height = ch + "px";
-    card.style.left   = (blockX + (blockW - cw) / 2) + "px";
-    card.style.top    = (logoRow === 0 ? (cellH - ch - m) : (cellH + m)) + "px";
-    card.style.zIndex = "20";
-    card.style.animationDelay = "0.4s";
-    stage.appendChild(card);
+    img.addEventListener("load", syncBoxWidths);
+    card.appendChild(img);
   }
+  // motto at the bottom
+  const motto = document.createElement("span");
+  motto.className = "motto";
+  motto.textContent = CONFIG.MOTTO;
+  card.appendChild(motto);
 
-  return stage;
+  document.getElementById("screen").appendChild(card);
+  logoBox = card;
+}
+function placeLogoBox() {
+  if (!logoBox) return;
+  const screen = document.getElementById("screen");
+  const W = screen.clientWidth, H = screen.clientHeight;
+  const cellW = W / GRID.COLS, cellH = H / GRID.ROWS;
+  const bx = LOGO_CELL.c * cellW, by = LOGO_CELL.r * cellH;
+  const bw = LOGO_CELL.w * cellW, bh = LOGO_CELL.h * cellH;
+  const cw = bw * 0.80, ch = Math.min(bh * 0.92, cw * 0.52);   // taller — fits logo + motto
+  logoBox.style.width  = cw + "px";
+  logoBox.style.height = ch + "px";
+  logoBox.style.left   = (bx + (bw - cw) / 2) + "px";
+  logoBox.style.top    = (by + (bh - ch) / 2) + "px";
+  syncBoxWidths();
+}
+
+// make the motto the SAME WIDTH as the logo (scale its font, no distortion)
+function syncBoxWidths() {
+  if (!logoBox) return;
+  const logo  = logoBox.querySelector(".logo-img, .logo");
+  const motto = logoBox.querySelector(".motto");
+  if (!logo || !motto) return;
+  const T = logo.getBoundingClientRect().width;     // logo's rendered width
+  if (T <= 0) return;                               // image not loaded yet
+  motto.style.fontSize = "";                        // reset to CSS size
+  const natW    = motto.getBoundingClientRect().width;
+  const natFont = parseFloat(getComputedStyle(motto).fontSize) || 16;
+  if (natW > 0) motto.style.fontSize = (natFont * T / natW) + "px";
 }
 
 /* =====================================================================
@@ -510,6 +584,8 @@ async function start() {
   setTimeout(() => status && status.remove(), 3000);
 
   if (!ALL.length) { if (status) status.textContent = "No posts found."; return; }
+  ensureLogoBox();
+  placeLogoBox();
   nextScreen();
   setInterval(nextScreen, CONFIG.ROTATE_MS);
   if (CONFIG.REFRESH_MIN) setInterval(refreshPool, CONFIG.REFRESH_MIN * 60000);
@@ -519,7 +595,7 @@ async function start() {
 let rT;
 window.addEventListener("resize", () => {
   clearTimeout(rT);
-  rT = setTimeout(() => { if (current) { cursor = Math.max(0, cursor - CONFIG.POSTS_PER_SCREEN); nextScreen(); } }, 400);
+  rT = setTimeout(() => { placeLogoBox(); if (current) { cursor = Math.max(0, cursor - CONFIG.POSTS_PER_SCREEN); nextScreen(); } }, 400);
 });
 
 start();
