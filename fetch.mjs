@@ -2,27 +2,28 @@
 // fetch.mjs — pull recent Instagram posts into posts.json
 // ------------------------------------------------------------
 // Uses Meta's official Instagram Graph API. Free + unlimited for
-// your own Business/Creator account. Run on a schedule (see the
-// GitHub Actions workflow) so posts.json always has fresh posts
-// and fresh media URLs.
+// your own Business/Creator accounts. Supports ONE OR MORE
+// accounts: set IG_USER_ID to a comma-separated list of IG user
+// ids. Each post is tagged with its own @handle so the wall shows
+// the right account on every tile.
 //
-// Required environment variables:
-//   IG_ACCESS_TOKEN  — a long-lived access token
-//   IG_USER_ID       — your Instagram Business account user id
-// Optional:
+// Environment variables:
+//   IG_ACCESS_TOKEN  — a long-lived token that can access ALL the accounts
+//   IG_USER_ID       — one id, or several comma-separated
+//                      e.g. "17841400468201311,17841400000000000"
 //   DAYS_WINDOW      — only keep posts from the last N days (default 90)
-//   MAX_POSTS        — cap the pool size (default 120)
+//   MAX_POSTS        — cap the merged pool size (default 200)
 // ============================================================
 
 import { writeFileSync } from "node:fs";
 
 const TOKEN = process.env.IG_ACCESS_TOKEN;
-const USER  = process.env.IG_USER_ID;
+const USERS = (process.env.IG_USER_ID || "").split(",").map(s => s.trim()).filter(Boolean);
 const DAYS  = Number(process.env.DAYS_WINDOW || 90);
-const MAX   = Number(process.env.MAX_POSTS  || 120);
+const MAX   = Number(process.env.MAX_POSTS  || 200);
 const VER   = "v21.0";
 
-if (!TOKEN || !USER) {
+if (!TOKEN || !USERS.length) {
   console.error("Missing IG_ACCESS_TOKEN or IG_USER_ID environment variables.");
   process.exit(1);
 }
@@ -39,32 +40,46 @@ async function firstChildUrl(id) {
   } catch { return ""; }
 }
 
-const out = [];
-let url = `https://graph.facebook.com/${VER}/${USER}/media?fields=${FIELDS}&limit=50&access_token=${TOKEN}`;
+async function fetchAccount(user) {
+  // resolve the @handle for this account
+  let username = user;
+  try {
+    const u = await (await fetch(`https://graph.facebook.com/${VER}/${user}?fields=username&access_token=${TOKEN}`)).json();
+    if (u.username) username = u.username;
+  } catch { /* keep id as fallback */ }
 
-while (url && out.length < MAX) {
-  const data = await (await fetch(url)).json();
-  if (data.error) { console.error("Graph API error:", data.error); process.exit(1); }
+  const out = [];
+  let url = `https://graph.facebook.com/${VER}/${user}/media?fields=${FIELDS}&limit=50&access_token=${TOKEN}`;
+  while (url) {
+    const data = await (await fetch(url)).json();
+    if (data.error) { console.error(`Graph API error for ${user}:`, data.error); break; }
 
-  for (const m of (data.data || [])) {
-    // media is returned newest-first, so once we pass the window we can stop
-    if (new Date(m.timestamp).getTime() < cutoff) { url = null; break; }
-
-    let mediaUrl = m.media_url;
-    if (!mediaUrl && m.media_type === "CAROUSEL_ALBUM") mediaUrl = await firstChildUrl(m.id);
-    if (!mediaUrl) continue;
-
-    out.push({
-      mediaType:    m.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
-      mediaUrl,
-      thumbnailUrl: m.thumbnail_url || "",
-      permalink:    m.permalink || "",
-      timestamp:    m.timestamp,
-    });
-    if (out.length >= MAX) break;
+    let stop = false;
+    for (const m of (data.data || [])) {
+      if (new Date(m.timestamp).getTime() < cutoff) { stop = true; break; }  // newest-first
+      let mediaUrl = m.media_url;
+      if (!mediaUrl && m.media_type === "CAROUSEL_ALBUM") mediaUrl = await firstChildUrl(m.id);
+      if (!mediaUrl) continue;
+      out.push({
+        username,                                       // per-post handle
+        mediaType:    m.media_type === "VIDEO" ? "VIDEO" : "IMAGE",
+        mediaUrl,
+        thumbnailUrl: m.thumbnail_url || "",
+        permalink:    m.permalink || "",
+        timestamp:    m.timestamp,
+      });
+    }
+    if (stop) break;
+    url = data.paging?.next || null;
   }
-  if (url) url = data.paging?.next || null;
+  console.log(`@${username}: ${out.length} posts`);
+  return out;
 }
 
-writeFileSync("posts.json", JSON.stringify({ username: "ozonefc.uz", posts: out }, null, 2));
-console.log(`Wrote ${out.length} posts -> posts.json`);
+let all = [];
+for (const user of USERS) all = all.concat(await fetchAccount(user));
+all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));   // newest first across all accounts
+all = all.slice(0, MAX);
+
+writeFileSync("posts.json", JSON.stringify({ posts: all }, null, 2));
+console.log(`Wrote ${all.length} posts from ${USERS.length} account(s) -> posts.json`);

@@ -285,7 +285,7 @@ function normalise(p, handle) {
     src:    url,
     poster: p.thumbnailUrl || p.thumbnail_url || "",
     time:   new Date(p.timestamp || p.time || Date.now()).getTime(),
-    handle: handle || CONFIG.HANDLE,
+    handle: p.username ? "@" + p.username : (handle || CONFIG.HANDLE),  // per-post handle
     aspect: (w && h) ? w / h : (isVideo ? 9/16 : 1), // w/h
   };
 }
