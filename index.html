@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ozone FC — Instagram Wall</title>
+<style>
+  /* ============================================================
+     OZONE FC — INSTAGRAM TV WALL
+     ------------------------------------------------------------
+     Shows a scattered collage of your latest Instagram posts.
+     - 10 random posts per screen, from the last 90 days
+     - rotates to 10 more every 15 seconds
+     - true aspect ratio (no cropping), videos autoplay muted
+     - random position / random size / some faded (background),
+       some sharp (foreground)
+     - each tile shows only the @handle + how long ago it posted
+     ============================================================ */
+
+  :root {
+    /* ---- Ozone FC corporate colours ---- */
+    --lime:      #abcf3e;            /* R171 G207 B62  */
+    --charcoal:  #35373b;            /* R53  G55  B59  */
+    --wall:      #303236;            /* slightly darker charcoal for the wall */
+    --card:      #1d1e20;            /* badges + #ozonefc card */
+    --badge-bg:  rgba(20,21,23,0.90);
+    --text:      #ffffff;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:100%; height:100%;
+    background:#000;             /* letterbox bars around the 16:9 screen */
+    overflow:hidden;
+    font-family:'Helvetica Neue', Arial, sans-serif;
+    cursor:none;                 /* hide cursor on TV */
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* centre a fixed 16:9 screen inside the viewport (true TV ratio) */
+  #frame {
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #screen {
+    position:relative;
+    aspect-ratio:16 / 9;
+    width:min(100vw, 177.78vh);  /* 16/9 of viewport height */
+    overflow:hidden;
+    background:var(--wall);
+  }
+
+  /* faint hexagon texture, like the mockups */
+  #wall {
+    position:absolute; inset:0;
+    background-color:var(--wall);
+    background-image:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'><path d='M28 0L56 16v33L28 65 0 49V16z' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='1'/><path d='M28 66L56 82v33L28 131 0 115V82z' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='1'/></svg>");
+    background-size:56px 100px;
+  }
+
+  /* one rotating screen of tiles */
+  .stage {
+    position:absolute; inset:0;
+    opacity:0;
+    transition:opacity 1.1s ease;
+  }
+  .stage.in { opacity:1; }
+
+  /* anchor — NOT clipped, so the badge can spill past the image edge */
+  .tile {
+    position:absolute;
+    transform:scale(0.97);
+    opacity:0;
+    animation:pop 0.9s ease forwards;
+  }
+  @keyframes pop { to { opacity:1; transform:scale(1); } }
+
+  /* the image/video box — sharp corners, flat, like the mockups */
+  .tile .media {
+    position:relative;
+    width:100%; height:100%;
+    overflow:hidden;
+    background:#111;
+  }
+  .tile .media img, .tile .media video {
+    display:block;
+    width:100%; height:100%;
+    object-fit:cover;            /* box already matches media aspect ratio */
+  }
+
+  /* recessed background tiles: dark image, but the label stays readable */
+  .tile.bg .media img, .tile.bg .media video { filter:brightness(0.5); }
+  .tile.bg .media::after {
+    content:""; position:absolute; inset:0;
+    background:rgba(28,30,33,0.50);
+  }
+
+  /* @handle + time-ago rendered as TWO detached dark chips, like the mockups:
+     [IG @ozonefc.uz] on the image's bottom-left, and a separate [Xw / ago]
+     box floating to its right in the dark gap. */
+  .badge {
+    position:absolute;
+    left:0; bottom:7%;
+    display:flex; align-items:center;
+    background:transparent;
+    pointer-events:none;
+  }
+  .badge .chip {
+    background:var(--badge-bg);
+    display:flex; align-items:center;
+    padding:9px 14px;
+  }
+  .badge .handle-chip svg { width:26px; height:26px; flex:none; }
+  .badge .handle-chip .handle {
+    color:var(--text); font-weight:800;
+    font-size:clamp(11px, 0.95vw, 20px);
+    white-space:nowrap; letter-spacing:0.2px; margin-left:10px;
+  }
+  .badge .time-chip {
+    margin-left:auto;                /* pushes the time box to the far right */
+    flex-direction:column; align-items:flex-end;
+    line-height:1.0;
+  }
+  .badge .time-chip .n {
+    color:var(--text); font-weight:700;
+    font-size:clamp(12px, 0.95vw, 20px); white-space:nowrap;
+  }
+  .badge .time-chip .u {
+    color:var(--text); font-weight:400;
+    font-size:clamp(10px, 0.78vw, 16px); opacity:0.85; margin-top:2px;
+  }
+
+  /* logo box */
+  .hashcard {
+    position:absolute;
+    border:2px solid var(--lime);     /* thinner lines */
+    background:var(--card);
+    display:flex; align-items:center; justify-content:center;  /* centre the logo */
+    padding:0 36px;
+    z-index:60;
+    box-shadow:0 0 25px rgba(0,0,0,0.55);   /* x:0 y:0 blur:25 */
+    opacity:0; transform:scale(0.97);
+    animation:pop 0.9s ease forwards;
+  }
+  /* built-in ozonefc wordmark (fallback if the logo image fails to load) */
+  .hashcard .logo {
+    font-weight:800; letter-spacing:-1px;
+    font-size:clamp(34px, 3.8vw, 80px);
+    line-height:1; color:#fff;
+  }
+  .hashcard .logo .o,
+  .hashcard .logo .fc { color:var(--lime); }   /* corporate lime accents */
+  /* your uploaded logo image */
+  .hashcard .logo-img {
+    max-width:82%; max-height:74%;
+    width:auto; height:auto; object-fit:contain;
+  }
+
+  /* tiny status note (only while loading / on error) */
+  #status {
+    position:fixed; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    color:#888; font-size:18px; letter-spacing:0.5px;
+    text-align:center; z-index:200;
+  }
+</style>
+</head>
+<body>
+  <div id="frame">
+    <div id="screen">
+      <div id="wall"></div>
+      <div id="status">Loading feed…</div>
+    </div>
+  </div>
+
+<script>
+/* =====================================================================
+   1) CONFIG  —  the only part you normally need to touch
+   ===================================================================== */
+const CONFIG = {
+  // PRIMARY source: a posts.json produced by the Instagram Graph API fetcher
+  // (see fetch.mjs). This is the free, unlimited path — 60+ posts, refreshed
+  // on a schedule. If it isn't there yet, the wall falls back to Behold, then demo.
+  POSTS_JSON:        "posts.json",
+
+  // FALLBACK: a Behold.so JSON feed URL (free tier caps at 6 posts).
+  BEHOLD_FEED_URL:   "https://feeds.behold.so/9WCiXVTytew6QoPMXAJK",
+
+  HANDLE:            "@ozonefc.uz", // shown on every tile
+  POSTS_PER_SCREEN:  10,            // tiles per rotation
+  ROTATE_MS:         15000,         // change screen every 15s
+  DAYS_WINDOW:       90,            // only posts from the last N days
+  REFRESH_MIN:       60,            // re-pull the feed every N minutes (fresh posts + URLs)
+  SHOW_LOGO_CARD:    true,          // show the lime-bordered logo box on the right
+  LOGO_URL:          "logo.png",    // path/URL to your logo image; blank = built-in ozonefc wordmark
+};
+
+/* =====================================================================
+   2) DATA — fetch from Behold, normalise, filter to last 90 days
+   ===================================================================== */
+const IG_SVG = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2.5" y="2.5" width="19" height="19" rx="5.5" stroke="white" stroke-width="1.8"/>
+  <circle cx="12" cy="12" r="4.3" stroke="white" stroke-width="1.8"/>
+  <circle cx="17.4" cy="6.6" r="1.3" fill="white"/></svg>`;
+
+async function loadPosts() {
+  // 1) self-hosted posts.json (Instagram Graph API fetcher) — the unlimited path
+  if (CONFIG.POSTS_JSON) {
+    const p = await tryFeed(CONFIG.POSTS_JSON);
+    if (p && p.length) return p;
+  }
+  // 2) Behold feed (free tier = 6 posts)
+  if (CONFIG.BEHOLD_FEED_URL) {
+    const p = await tryFeed(CONFIG.BEHOLD_FEED_URL);
+    if (p && p.length) return p;
+  }
+  // 3) demo images
+  return demoPosts();
+}
+
+async function tryFeed(url) {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const raw  = Array.isArray(data) ? data : (data.posts || []);
+    const handle = data?.username ? "@" + data.username : CONFIG.HANDLE;
+
+    const posts  = raw.map(p => normalise(p, handle)).filter(Boolean);
+    const cutoff = Date.now() - CONFIG.DAYS_WINDOW * 86400000;
+    const recent = posts.filter(p => p.time >= cutoff);
+    return recent.length ? recent : posts;     // fall back to all if none in window
+  } catch (e) {
+    console.error("Feed load failed:", url, e);
+    return null;
+  }
+}
+
+// Map a Behold post object to the shape this wall uses
+function normalise(p, handle) {
+  const isVideo = (p.mediaType || p.media_type) === "VIDEO";
+  const url     = p.mediaUrl || p.media_url;
+  if (!url) return null;
+
+  // best available aspect ratio from Behold "sizes", else fall back
+  let w = 0, h = 0;
+  const s = p.sizes || {};
+  const pick = s.full || s.large || s.medium || s.small;
+  if (pick?.width && pick?.height) { w = pick.width; h = pick.height; }
+  else if (p.width && p.height)    { w = p.width;    h = p.height;    }
+
+  return {
+    type:   isVideo ? "video" : "image",
+    src:    url,
+    poster: p.thumbnailUrl || p.thumbnail_url || "",
+    time:   new Date(p.timestamp || p.time || Date.now()).getTime(),
+    handle: handle || CONFIG.HANDLE,
+    aspect: (w && h) ? w / h : (isVideo ? 9/16 : 1), // w/h
+  };
+}
+
+// Sample data so the wall runs before Behold is connected.
+// Portrait-dominant (reels / stories) to match the real feed look.
+function demoPosts() {
+  document.getElementById("status").textContent = "DEMO MODE — add your Behold feed URL";
+  const now = Date.now(), D = 86400000;
+  const imgs = [
+    [1011,9/16],[1043,4/5],[1062,9/16],[1027,9/16],[1074,4/5],
+    [1080,9/16],[1059,9/16],[1084,4/5],[1006,9/16],[1039,9/16],
+    [1050,4/5],[1024,9/16],[1015,9/16],[103,4/5],[1042,9/16],
+  ];
+  return imgs.map((m,i) => {
+    const h = 1000, w = Math.round(h * m[1]);
+    return {
+      type:"image",
+      src:`https://picsum.photos/id/${m[0]}/${w}/${h}`,
+      poster:"", time: now - (i*6+2)*D,
+      handle: CONFIG.HANDLE, aspect: m[1],
+    };
+  });
+}
+
+/* =====================================================================
+   3) HELPERS
+   ===================================================================== */
+function timeAgo(ms) {
+  const days = Math.floor((Date.now() - ms) / 86400000);
+  if (days < 1)  return { n: "today", u: "" };
+  if (days < 7)  return { n: days + "d", u: "ago" };
+  const w = Math.floor(days / 7);
+  return { n: w + "w", u: "ago" };
+}
+function shuffle(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+const rand = (min, max) => min + Math.random() * (max - min);
+
+/* =====================================================================
+   4) LAYOUT — scatter tiles over a jittered grid so they spread out
+      but still overlap & vary like the mockups
+   ===================================================================== */
+function buildStage(posts) {
+  const screen = document.getElementById("screen");
+  const W = screen.clientWidth, H = screen.clientHeight;
+  const stage = document.createElement("div");
+  stage.className = "stage";
+
+  /* ---- non-overlapping cell grid ----------------------------------
+     6 cols x 2 rows = 12 cells. Each post lives inside ONE cell and
+     never leaves it, so no two posts can overlap. The logo box claims
+     a 2-cell block on the right; that leaves exactly 10 post cells.   */
+  // grid adapts to however many posts the feed returns (+2 cells for the logo)
+  const ROWS = 2;
+  const COLS = Math.max(3, Math.ceil((posts.length + 2) / ROWS));
+  const cellW = W / COLS, cellH = H / ROWS;
+
+  // 2-cell block for the logo box — FIXED position (lower centre-right)
+  const logoRow  = 1;                        // constant, so the box never moves
+  const logoCol  = COLS - 2;                 // rightmost two cells of that row
+  const reserved = new Set([logoRow * COLS + logoCol, logoRow * COLS + logoCol + 1]);
+
+  // the remaining cells, shuffled, become the post slots
+  const slots = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      const id = r * COLS + c;
+      if (!reserved.has(id)) slots.push({ c, r });
+    }
+  const order = shuffle(slots);
+
+  // dimmed "background" tiles sit in the OUTER columns, like the references
+  const edge = [];
+  order.forEach((cell, i) => { if (cell.c === 0 || cell.c === COLS - 1) edge.push(i); });
+  const bgSet = new Set(shuffle(edge).slice(0, Math.min(3, edge.length)));
+
+  // let one or two foreground reels bleed off the top/bottom, like the mockup
+  const fg = [];
+  for (let i = 0; i < posts.length && i < order.length; i++) if (!bgSet.has(i)) fg.push(i);
+  const bleedSet = new Set(shuffle(fg).slice(0, 2));
+
+  posts.slice(0, order.length).forEach((post, i) => {
+    const cell = order[i];
+    const isBg = bgSet.has(i);
+    const tile = document.createElement("div");
+    tile.className = "tile" + (isBg ? " bg" : "");
+
+    tile.style.zIndex  = isBg ? "2" : "10";
+    tile.style.animationDelay = (i * 0.05) + "s";
+
+    // media wrapper (sharp corners, clipped)
+    const box = document.createElement("div");
+    box.className = "media";
+    let media;
+    if (post.type === "video") {
+      media = document.createElement("video");
+      media.src = post.src;
+      if (post.poster) media.poster = post.poster;
+      media.muted = true; media.loop = true;
+      media.autoplay = true; media.playsInline = true;
+      media.setAttribute("playsinline", "");
+      media.play?.().catch(()=>{});
+    } else {
+      media = document.createElement("img");
+      media.src = post.src;
+      media.loading = "eager";
+    }
+    box.appendChild(media);
+    tile.appendChild(box);
+
+    // @handle chip (bottom-left) + detached time chip floating to its right
+    const ago = timeAgo(post.time);
+    const badge = document.createElement("div");
+    badge.className = "badge";
+    badge.innerHTML =
+      `<span class="chip handle-chip">${IG_SVG}<span class="handle">${post.handle}</span></span>` +
+      `<span class="chip time-chip"><span class="n">${ago.n}</span>${ago.u ? `<span class="u">${ago.u}</span>` : ""}</span>`;
+    tile.appendChild(badge);
+
+    // ---- size & place the tile for a given aspect ratio (w/h) -------------
+    // Foreground stays fully in-frame; recessed bg tiles bleed off the sides;
+    // selected foreground reels bleed off the top/bottom (the mockup look).
+    const cellX = cell.c * cellW, cellY = cell.r * cellH;
+    const pad   = isBg ? 0.96 : 0.86;
+    const scale = rand(isBg ? 0.92 : 0.74, isBg ? 1.0 : 0.98);
+    const jX = Math.random(), jY = Math.random();        // stable jitter (no jump on refit)
+    const bX = isBg ? (cell.c === 0 ? rand(0.18, 0.40)
+                     : cell.c === COLS-1 ? rand(0.60, 0.82) : 0) : 0;
+    const bY = bleedSet.has(i) ? (cell.r === 0 ? rand(0.12, 0.30) : rand(0.70, 0.88)) : 0;
+
+    function fit(aspect) {
+      let tw = cellW * pad, th = tw / aspect;
+      if (th > cellH * pad) { th = cellH * pad; tw = th * aspect; }
+      tw *= scale; th *= scale;
+
+      let left;
+      if (isBg && cell.c === 0)            left = -tw * bX;                 // off left
+      else if (isBg && cell.c === COLS-1) left =  W - tw * bX;             // off right
+      else  left = Math.max(0, Math.min(cellX + jX * Math.max(0, cellW - tw), W - tw));
+
+      let top;
+      if (bY) top = (cell.r === 0) ? -th * bY : H - th * bY;              // bleed off top/bottom
+      else    top = Math.max(0, Math.min(cellY + jY * Math.max(0, cellH - th), H - th));
+
+      tile.style.width  = tw + "px";
+      tile.style.height = th + "px";
+      tile.style.left   = left + "px";
+      tile.style.top    = top + "px";
+      const cellRight = (cell.c + 1) * cellW - 4;
+      badge.style.width = Math.max(tw, Math.min(cellRight - left, W - left)) + "px";
+    }
+    fit(post.aspect);   // first guess from data (or default)
+
+    // correct to the media's TRUE aspect ratio once it loads (so nothing crops)
+    const onMeta = () => {
+      const aw = media.naturalWidth  || media.videoWidth;
+      const ah = media.naturalHeight || media.videoHeight;
+      if (aw && ah) fit(aw / ah);
+    };
+    media.addEventListener(post.type === "video" ? "loadedmetadata" : "load", onMeta);
+
+    stage.appendChild(tile);
+  });
+
+  // logo box in its reserved 2-cell block (always visible; wordmark fallback)
+  if (CONFIG.SHOW_LOGO_CARD) {
+    const card = document.createElement("div");
+    card.className = "hashcard";
+
+    const addWordmark = () => {
+      const wm = document.createElement("span");
+      wm.className = "logo";
+      wm.innerHTML = `<span class="o">o</span>zone<span class="fc">fc</span>`;
+      card.appendChild(wm);
+    };
+    if (CONFIG.LOGO_URL) {
+      const img = document.createElement("img");
+      img.className = "logo-img";
+      img.src = CONFIG.LOGO_URL;
+      img.alt = "logo";
+      img.onerror = () => { img.remove(); addWordmark(); };  // file missing → wordmark
+      card.appendChild(img);
+    } else {
+      addWordmark();
+    }
+
+    // place the card on the right, hugging the screen's vertical centre line
+    const blockX = logoCol * cellW;
+    const blockW = 2 * cellW, blockH = cellH;
+    const cw = blockW * 0.92, ch = Math.min(blockH * 0.55, cw * 0.38);
+    const m  = cellH * 0.06;
+    card.style.width  = cw + "px";
+    card.style.height = ch + "px";
+    card.style.left   = (blockX + (blockW - cw) / 2) + "px";
+    card.style.top    = (logoRow === 0 ? (cellH - ch - m) : (cellH + m)) + "px";
+    card.style.zIndex = "20";
+    card.style.animationDelay = "0.4s";
+    stage.appendChild(card);
+  }
+
+  return stage;
+}
+
+/* =====================================================================
+   5) ROTATION LOOP
+   ===================================================================== */
+let ALL = [], cursor = 0, current = null;
+
+function nextScreen() {
+  if (!ALL.length) return;
+  // take the next POSTS_PER_SCREEN, wrapping around; reshuffle on each wrap
+  if (cursor === 0) ALL = shuffle(ALL);
+  // never show more than the feed has, so a screen never repeats a post
+  const n = Math.min(CONFIG.POSTS_PER_SCREEN, ALL.length);
+  const slice = [];
+  for (let k = 0; k < n; k++) {
+    slice.push(ALL[cursor % ALL.length]);
+    cursor++;
+  }
+  if (cursor >= ALL.length) cursor = 0;
+
+  const wall  = document.getElementById("wall");
+  const stage = buildStage(slice);
+  wall.appendChild(stage);
+  requestAnimationFrame(() => stage.classList.add("in"));
+
+  // fade & remove the previous screen
+  const prev = current;
+  current = stage;
+  if (prev) {
+    prev.classList.remove("in");
+    setTimeout(() => prev.remove(), 1200);
+  }
+}
+
+async function refreshPool() {
+  const p = await loadPosts();
+  if (p && p.length) ALL = p;          // swap in fresh posts + non-expired media URLs
+}
+
+async function start() {
+  await refreshPool();
+  const status = document.getElementById("status");
+  setTimeout(() => status && status.remove(), 3000);
+
+  if (!ALL.length) { if (status) status.textContent = "No posts found."; return; }
+  nextScreen();
+  setInterval(nextScreen, CONFIG.ROTATE_MS);
+  if (CONFIG.REFRESH_MIN) setInterval(refreshPool, CONFIG.REFRESH_MIN * 60000);
+}
+
+// rebuild current screen on resize so it always fills the TV
+let rT;
+window.addEventListener("resize", () => {
+  clearTimeout(rT);
+  rT = setTimeout(() => { if (current) { cursor = Math.max(0, cursor - CONFIG.POSTS_PER_SCREEN); nextScreen(); } }, 400);
+});
+
+start();
+</script>
+</body>
+</html>
