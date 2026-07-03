@@ -102,7 +102,8 @@
   .tile.bg .media img, .tile.bg .media video { filter:brightness(0.62); }
   .tile.bg .media::after {
     content:""; position:absolute; inset:0;
-    background:rgba(28,30,33,0.40);
+    /* gradient veil: lighter at the top, sinking into the wall at the bottom */
+    background:linear-gradient(180deg, rgba(28,30,33,0.22) 0%, rgba(28,30,33,0.68) 100%);
   }
 
   /* @handle + time-ago rendered as TWO detached dark chips, like the mockups:
@@ -402,7 +403,7 @@ function buildStage(posts) {
   }
 
   // per-column pens, with a small random top stagger so rows don't line up flat
-  const colY = Array.from({ length: COLS }, () => -rand(0, H * 0.04));
+  const colY = Array.from({ length: COLS }, () => -rand(0, H * 0.12));   // staggered tops
 
   const n = Math.min(CONFIG.POSTS_PER_SCREEN, posts.length);
   const bgSet = new Set(shuffle([...Array(n).keys()]).slice(0, 2));   // 2 recessed, for depth
@@ -415,13 +416,11 @@ function buildStage(posts) {
     const isBg   = bgSet.has(i);
     let aspect = post.aspect || (post.type === "video" ? 9 / 16 : 4 / 5);
     aspect = Math.min(1.91, Math.max(9 / 16, aspect));   // clamp odd ratios (tall collages etc.)
-    // chaos INSIDE the column: vary each post's size, shift it left / right
-    const innerW = cols[col].w - gap;
-    const w = innerW * rand(0.78, 1.0);          // mixture of larger & smaller posts (no runts)
+    // clean: every post fills its column exactly (stable width, no jitter)
+    const w = cols[col].w - gap;
     const h = w / aspect;
-    const xJitter = rand(0, innerW - w);         // sits left, right, or anywhere in the column
 
-    const x = cols[col].x + gap / 2 + xJitter;
+    const x = cols[col].x + gap / 2;
     let y = colY[col];
     if (boxCols.has(col) && colY[col] < boxTop) {
       y = boxTop - h;                 // first post in a box column sits ABOVE the box (bleeds off top)
