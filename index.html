@@ -79,6 +79,7 @@
     animation:pop 0.9s ease forwards;
   }
   @keyframes pop { to { opacity:1; transform:scale(1); } }
+  @keyframes fadeOut { to { opacity:0; transform:scale(0.97); } }
 
   /* the image/video box — sharp corners, flat, like the mockups */
   .tile .media {
@@ -93,6 +94,9 @@
     width:100%; height:100%;
     object-fit:cover;            /* box already matches media aspect ratio */
   }
+  /* slow Ken Burns drift on stills, so the wall always feels alive */
+  .tile .media img { animation:kenburns 16s ease-in-out forwards; }
+  @keyframes kenburns { from { transform:scale(1); } to { transform:scale(1.045); } }
 
   /* recessed background tiles: dark image, but the label stays readable */
   .tile.bg .media img, .tile.bg .media video { filter:brightness(0.62); }
@@ -114,6 +118,7 @@
     background:transparent;
     pointer-events:none;
     font-size:14px;                   /* overridden inline, relative to post size */
+    font-family:'ITC Avant Garde Gothic Pro','Century Gothic','Futura','Helvetica Neue',sans-serif;
   }
   .badge .chip {
     background:var(--badge-bg);
@@ -131,11 +136,11 @@
   }
   .badge .time-chip .n {
     color:var(--text); font-weight:700;
-    font-size:1em; white-space:nowrap;
+    font-size:0.82em; white-space:nowrap;
   }
   .badge .time-chip .u {
     color:var(--text); font-weight:400;
-    font-size:0.72em; opacity:0.85; margin-top:0.15em;
+    font-size:0.6em; opacity:0.85; margin-top:0.15em;
   }
 
   /* logo box */
@@ -191,6 +196,22 @@
   .hashcard .logo .o,
   .hashcard .logo .fc { color:var(--lime); }
 
+  /* "follow us" QR card, bottom-right */
+  .qrcard {
+    position:absolute; right:1.1%; bottom:2.4%;
+    z-index:70;
+    background:#fff;
+    padding:7px 7px 5px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    box-shadow:0 0 18px rgba(0,0,0,0.55);
+  }
+  .qrcard img { display:block; width:clamp(60px, 5.6vw, 104px); height:auto; }
+  .qrcard span {
+    font-family:'ITC Avant Garde Gothic Pro','Century Gothic','Futura',sans-serif;
+    font-weight:600; font-size:clamp(8px, 0.62vw, 12px);
+    color:#1d1e20; letter-spacing:0.3px; line-height:1;
+  }
+
   /* tiny status note (only while loading / on error) */
   #status {
     position:fixed; left:50%; top:50%;
@@ -229,6 +250,9 @@ const CONFIG = {
   SHOW_LOGO_CARD:    true,          // show the lime-bordered box on the right
   LOGO_URL:          "logo.png",    // logo shown at the top of the box
   MOTTO:             "atmosphere for you",  // motto at the bottom (ITC Avant Garde, lowercase)
+  SHOW_QR:           true,          // "follow us" QR card, bottom-right
+  QR_IMG:            "qr.png",      // generated QR → https://www.instagram.com/ozonefc.uz
+  QR_LABEL:          "follow us",
 };
 
 /* =====================================================================
@@ -383,7 +407,7 @@ function buildStage(posts) {
   }
 
   // per-column pens, with a small random top stagger so rows don't line up flat
-  const colY = Array.from({ length: COLS }, () => -rand(0, H * 0.06));
+  const colY = Array.from({ length: COLS }, () => -rand(0, H * 0.04));
 
   const n = Math.min(CONFIG.POSTS_PER_SCREEN, posts.length);
   const bgSet = new Set(shuffle([...Array(n).keys()]).slice(0, 2));   // 2 recessed, for depth
@@ -394,10 +418,11 @@ function buildStage(posts) {
     for (let c = 1; c < COLS; c++) if (colY[c] < colY[col]) col = c;
 
     const isBg   = bgSet.has(i);
-    const aspect = post.aspect || (post.type === "video" ? 9 / 16 : 4 / 5);
+    let aspect = post.aspect || (post.type === "video" ? 9 / 16 : 4 / 5);
+    aspect = Math.min(1.91, Math.max(9 / 16, aspect));   // clamp odd ratios (tall collages etc.)
     // chaos INSIDE the column: vary each post's size, shift it left / right
     const innerW = cols[col].w - gap;
-    const w = innerW * rand(0.66, 1.0);          // mixture of larger & smaller posts
+    const w = innerW * rand(0.78, 1.0);          // mixture of larger & smaller posts (no runts)
     const h = w / aspect;
     const xJitter = rand(0, innerW - w);         // sits left, right, or anywhere in the column
 
@@ -417,7 +442,7 @@ function buildStage(posts) {
     tile.style.width  = w + "px";
     tile.style.height = h + "px";
     tile.style.zIndex = isBg ? "2" : "10";
-    tile.style.animationDelay = (i * 0.04) + "s";
+    tile.style.animationDelay = (i * 0.08) + "s";   // incoming cascade
 
     // media
     const mbox = document.createElement("div");
@@ -488,6 +513,23 @@ function ensureLogoBox() {
   document.getElementById("screen").appendChild(card);
   logoBox = card;
 }
+/* "follow us" QR card — persistent like the logo box; hides itself if qr.png is missing */
+let qrBox = null;
+function ensureQrBox() {
+  if (qrBox || !CONFIG.SHOW_QR) return;
+  const card = document.createElement("div");
+  card.className = "qrcard";
+  const img = document.createElement("img");
+  img.src = CONFIG.QR_IMG; img.alt = "QR";
+  img.onerror = () => card.remove();
+  card.appendChild(img);
+  const label = document.createElement("span");
+  label.textContent = CONFIG.QR_LABEL;
+  card.appendChild(label);
+  document.getElementById("screen").appendChild(card);
+  qrBox = card;
+}
+
 function placeLogoBox() {
   if (!logoBox) return;
   const screen = document.getElementById("screen");
@@ -567,12 +609,29 @@ function nextScreen() {
   wall.appendChild(stage);
   requestAnimationFrame(() => stage.classList.add("in"));
 
-  // fade & remove the previous screen
+  // cascade the previous screen out tile-by-tile (no whole-screen blink)
   const prev = current;
   current = stage;
   if (prev) {
-    prev.classList.remove("in");
-    setTimeout(() => prev.remove(), 1200);
+    const tiles = prev.querySelectorAll(".tile");
+    tiles.forEach((t, k) => {
+      t.style.animation = "fadeOut 0.5s ease forwards";
+      t.style.animationDelay = (k * 0.06) + "s";
+    });
+    setTimeout(() => prev.remove(), 600 + tiles.length * 60 + 300);
+  }
+  preloadUpcoming();                   // warm the cache for the next rotation
+}
+
+// warm the browser cache for the UPCOMING screen (images + video posters),
+// so the next rotation arrives fully rendered instead of popping in blank
+function preloadUpcoming() {
+  if (!ALL.length) return;
+  const n = Math.min(CONFIG.POSTS_PER_SCREEN, ALL.length);
+  for (let k = 0; k < n; k++) {
+    const p = ALL[(cursor + k) % ALL.length];
+    const src = p.type === "video" ? p.poster : p.src;
+    if (src) { const im = new Image(); im.src = src; }
   }
 }
 
@@ -589,6 +648,7 @@ async function start() {
   if (!ALL.length) { if (status) status.textContent = "No posts found."; return; }
   ensureLogoBox();
   placeLogoBox();
+  ensureQrBox();
   nextScreen();
   setInterval(nextScreen, CONFIG.ROTATE_MS);
   if (CONFIG.REFRESH_MIN) setInterval(refreshPool, CONFIG.REFRESH_MIN * 60000);
