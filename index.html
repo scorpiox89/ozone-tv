@@ -386,7 +386,7 @@ function buildStage(posts) {
      The logo box owns the right columns — posts flow above / below it.  */
   const gap  = W * 0.006;
   const COLS = COL_N;
-  const bigCol = [1, 2, 2][(Math.random() * 3) | 0];
+  const bigCol = (Math.random() * 3) | 0;   // large column moves evenly between cols 1-3
   const cols = makeCols(W, bigCol);
 
   // reserve the ACTUAL logo-box rectangle (read from the live element → in sync)
