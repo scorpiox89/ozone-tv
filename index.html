@@ -598,6 +598,7 @@ function nextScreen() {
   const wall  = document.getElementById("wall");
   const stage = buildStage(slice);
   wall.appendChild(stage);
+  fitBadges(stage);                    // labels never overflow their post
   requestAnimationFrame(() => stage.classList.add("in"));
 
   // cascade the previous screen out tile-by-tile (no whole-screen blink)
@@ -612,6 +613,26 @@ function nextScreen() {
     setTimeout(() => prev.remove(), 600 + tiles.length * 60 + 300);
   }
   preloadUpcoming();                   // warm the cache for the next rotation
+}
+
+// ONE uniform label size for the whole screen, set by the smallest post:
+// every badge gets the same font, then it shrinks further (still uniformly)
+// until even the longest handle fits inside its own post
+function fitBadges(stage) {
+  const badges = [...stage.querySelectorAll(".tile .badge")];
+  if (!badges.length) return;
+  // uniform base = the smallest post's proportional size
+  let f = Infinity;
+  badges.forEach(b => { f = Math.min(f, parseFloat(b.style.fontSize) || 14); });
+  badges.forEach(b => { b.style.fontSize = f + "px"; });
+  // shrink the uniform size until every label fits its post (longest handle rules)
+  let scale = 1;
+  badges.forEach(b => {
+    const tw = parseFloat(b.parentElement.style.width);
+    const bw = b.scrollWidth;
+    if (bw > tw) scale = Math.min(scale, tw / bw);
+  });
+  if (scale < 1) badges.forEach(b => { b.style.fontSize = (f * scale * 0.97) + "px"; });
 }
 
 // warm the browser cache for the UPCOMING screen (images + video posters),
