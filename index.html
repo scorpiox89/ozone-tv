@@ -200,16 +200,18 @@
   .qrcard {
     position:absolute; right:1.1%; bottom:2.4%;
     z-index:70;
-    background:#fff;
-    padding:7px 7px 5px;
-    display:flex; flex-direction:column; align-items:center; gap:4px;
-    box-shadow:0 0 18px rgba(0,0,0,0.55);
+    background:transparent;            /* the PNG's own transparency shows through */
+    display:flex; flex-direction:column; align-items:center; gap:6px;
   }
-  .qrcard img { display:block; width:clamp(60px, 5.6vw, 104px); height:auto; }
+  .qrcard img {
+    display:block; width:clamp(60px, 5.6vw, 104px); height:auto;
+    filter:drop-shadow(0 0 12px rgba(0,0,0,0.6));   /* same depth as the posts */
+  }
   .qrcard span {
     font-family:'ITC Avant Garde Gothic Pro','Century Gothic','Futura',sans-serif;
     font-weight:600; font-size:clamp(8px, 0.62vw, 12px);
-    color:#1d1e20; letter-spacing:0.3px; line-height:1;
+    color:#fff; letter-spacing:0.3px; line-height:1;
+    text-shadow:0 0 8px rgba(0,0,0,0.6);
   }
 
   /* tiny status note (only while loading / on error) */
