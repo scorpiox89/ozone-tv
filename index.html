@@ -204,14 +204,8 @@
     display:flex; flex-direction:column; align-items:center; gap:6px;
   }
   .qrcard img {
-    display:block; width:clamp(60px, 5.6vw, 104px); height:auto;
+    display:block; width:clamp(95px, 8.8vw, 168px); height:auto;
     filter:drop-shadow(0 0 12px rgba(0,0,0,0.6));   /* same depth as the posts */
-  }
-  .qrcard span {
-    font-family:'ITC Avant Garde Gothic Pro','Century Gothic','Futura',sans-serif;
-    font-weight:600; font-size:clamp(8px, 0.62vw, 12px);
-    color:#fff; letter-spacing:0.3px; line-height:1;
-    text-shadow:0 0 8px rgba(0,0,0,0.6);
   }
 
   /* tiny status note (only while loading / on error) */
@@ -253,8 +247,7 @@ const CONFIG = {
   LOGO_URL:          "logo.png",    // logo shown at the top of the box
   MOTTO:             "atmosphere for you",  // motto at the bottom (ITC Avant Garde, lowercase)
   SHOW_QR:           true,          // "follow us" QR card, bottom-right
-  QR_IMG:            "qr.png",      // generated QR → https://www.instagram.com/ozonefc.uz
-  QR_LABEL:          "follow us",
+  QR_IMG:            "qr.png",      // QR → https://www.instagram.com/ozonefc.uz
 };
 
 /* =====================================================================
@@ -525,9 +518,6 @@ function ensureQrBox() {
   img.src = CONFIG.QR_IMG; img.alt = "QR";
   img.onerror = () => card.remove();
   card.appendChild(img);
-  const label = document.createElement("span");
-  label.textContent = CONFIG.QR_LABEL;
-  card.appendChild(label);
   document.getElementById("screen").appendChild(card);
   qrBox = card;
 }
