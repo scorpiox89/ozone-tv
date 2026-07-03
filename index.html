@@ -55,9 +55,12 @@
   #wall {
     position:absolute; inset:0;
     background-color:var(--wall);
+    /* depth vignette (light centre, darker edges) over a much smaller honeycomb */
     background-image:
+      radial-gradient(ellipse at 50% 44%, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 46%, rgba(0,0,0,0.42) 100%),
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='27.71' height='48' viewBox='0 0 27.71 48'><g fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='1'><path d='M13.86 -16L27.71 -8L27.71 8L13.86 16L0 8L0 -8Z'/><path d='M0 8L13.86 16L13.86 32L0 40L-13.86 32L-13.86 16Z'/><path d='M27.71 8L41.57 16L41.57 32L27.71 40L13.86 32L13.86 16Z'/><path d='M13.86 32L27.71 40L27.71 56L13.86 64L0 56L0 40Z'/></g></svg>");
-    background-size:38px 66px;          /* honeycomb scale */
+    background-size:auto, 18px 31px;    /* radial full-screen, honeycomb much smaller */
+    background-repeat:no-repeat, repeat;
   }
 
   /* one rotating screen of tiles */
@@ -83,6 +86,7 @@
     width:100%; height:100%;
     overflow:hidden;
     background:#111;
+    box-shadow:0 0 18px rgba(0,0,0,0.6);   /* x:0 y:0 soft shadow → depth */
   }
   .tile .media img, .tile .media video {
     display:block;
@@ -139,14 +143,16 @@
     position:absolute;
     border:1px solid var(--lime);     /* slim frame */
     background-color:var(--card);
-    /* same honeycomb as the wall (pattern taken from the background) */
+    /* same honeycomb as the wall (smaller now) + a soft inner depth glow */
     background-image:
+      radial-gradient(ellipse at 50% 45%, rgba(255,255,255,0.045) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.35) 100%),
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='27.71' height='48' viewBox='0 0 27.71 48'><g fill='none' stroke='%23ffffff' stroke-opacity='0.06' stroke-width='1'><path d='M13.86 -16L27.71 -8L27.71 8L13.86 16L0 8L0 -8Z'/><path d='M0 8L13.86 16L13.86 32L0 40L-13.86 32L-13.86 16Z'/><path d='M27.71 8L41.57 16L41.57 32L27.71 40L13.86 32L13.86 16Z'/><path d='M13.86 32L27.71 40L27.71 56L13.86 64L0 56L0 40Z'/></g></svg>");
-    background-size:38px 66px;
+    background-size:auto, 18px 31px;
+    background-repeat:no-repeat, repeat;
     /* space-evenly makes the gap above the logo, between logo & motto,
        and below the motto all identical */
     display:flex; flex-direction:column; align-items:center; justify-content:space-evenly;
-    padding:0 22px;
+    padding:0;
     z-index:60;
     box-shadow:0 0 25px rgba(0,0,0,0.55);   /* x:0 y:0 blur:25 — static, no fade */
   }
@@ -172,11 +178,10 @@
     white-space:nowrap;
     font-size:clamp(13px, 1.5vw, 32px);   /* tagline under the logo */
   }
-  /* logo at the top of the box */
+  /* logo at the top of the box (width set in JS for uniform margins) */
   .hashcard .logo-img {
     display:block;
-    width:82%; height:auto;          /* explicit width → always large */
-    max-height:46%;
+    height:auto;
   }
   /* wordmark fallback if the logo image fails to load */
   .hashcard .logo {
@@ -331,9 +336,20 @@ function shuffle(a) {
 }
 const rand = (min, max) => min + Math.random() * (max - min);
 
-// fixed layout grid, so the static logo box always lines up with the cells
-const GRID = { COLS: 6, ROWS: 3 };
-const LOGO_CELL = { c: GRID.COLS - 2, r: 1, w: 2, h: 1 };   // 2-wide block, mid-right
+// fixed vertical columns ("invisible borders"). Widths VARY — one large column
+// (centre-ish, moves each slide) mixed with smaller ones. cols 3-4 are wider and
+// host the logo box. Posts snap to columns; the chaos happens WITHIN them.
+const COL_N = 5;
+const LOGO_CELL = { c: 3, w: 2 };
+
+function makeCols(W, bigCol) {
+  const weights = [0.85, 0.85, 0.85, 1.35, 1.35]; // cols 3-4 wider (logo-box area)
+  weights[bigCol] += 0.7;                          // the large post column (from 0-2)
+  const total = weights.reduce((a, b) => a + b, 0);
+  const cols = []; let x = 0;
+  for (const wt of weights) { const w = wt / total * W; cols.push({ x, w }); x += w; }
+  return cols;                        // cols 3 & 4 are identical regardless of bigCol
+}
 
 /* =====================================================================
    4) LAYOUT — scatter tiles over a jittered grid so they spread out
@@ -345,69 +361,65 @@ function buildStage(posts) {
   const stage = document.createElement("div");
   stage.className = "stage";
 
-  /* ---- spanning grid (varied sizes, no overlap) -------------------
-     A COLS x ROWS occupancy grid. Most posts take one cell; a few take
-     a 2x2 / 1x2 block so some come out much larger, like the mockups.
-     The logo box permanently owns a 2-cell block (mid-right).         */
-  const { COLS, ROWS } = GRID;
-  const cellW = W / COLS, cellH = H / ROWS;
+  /* ---- fixed-column masonry (variable widths + chaos within) ------
+     Posts snap to COLS columns; within a column they stack and vary in
+     size and left/right position. One column is larger (moves each slide).
+     The logo box owns the right columns — posts flow above / below it.  */
+  const gap  = W * 0.006;
+  const COLS = COL_N;
+  const bigCol = [1, 2, 2][(Math.random() * 3) | 0];
+  const cols = makeCols(W, bigCol);
 
-  const occ = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
-  for (let dr = 0; dr < LOGO_CELL.h; dr++)
-    for (let dc = 0; dc < LOGO_CELL.w; dc++)
-      occ[LOGO_CELL.r + dr][LOGO_CELL.c + dc] = true;     // reserve the logo block
-
-  const freeSpots = (sw, sh) => {
-    const out = [];
-    for (let r = 0; r + sh <= ROWS; r++)
-      for (let c = 0; c + sw <= COLS; c++) {
-        let ok = true;
-        for (let dr = 0; dr < sh && ok; dr++)
-          for (let dc = 0; dc < sw; dc++) if (occ[r + dr][c + dc]) { ok = false; break; }
-        if (ok) out.push({ r, c });
-      }
-    return out;
-  };
-  const take = (r, c, sw, sh) => {
-    for (let dr = 0; dr < sh; dr++) for (let dc = 0; dc < sw; dc++) occ[r + dr][c + dc] = true;
-  };
-
-  // size recipe: a couple of large / tall feature tiles, the rest single-cell
-  const capacity = COLS * ROWS - LOGO_CELL.w * LOGO_CELL.h;
-  const n = Math.min(posts.length, capacity);
-  // consistent feature set each slide (less random): one large + two tall, rest single
-  const spans = [[2,2],[1,2],[1,2]];
-  while (spans.length < n) spans.push([1,1]);
-  spans.length = n;
-
-  // place feature tiles first so they fit; pick a random valid spot for variety
-  const placed = [];
-  for (let i = 0; i < n; i++) {
-    let [sw, sh] = spans[i];
-    let spots = freeSpots(sw, sh);
-    if (!spots.length) { sw = 1; sh = 1; spots = freeSpots(1, 1); }   // downgrade if it won't fit
-    if (!spots.length) break;                                        // grid full
-    const s = spots[(Math.random() * spots.length) | 0];
-    take(s.r, s.c, sw, sh);
-    placed.push({ post: posts[i], r: s.r, c: s.c, sw, sh });
+  // reserve the ACTUAL logo-box rectangle (read from the live element → in sync)
+  let boxTop = 0, boxBot = 0; const boxCols = new Set();
+  if (logoBox) {
+    const sr = screen.getBoundingClientRect();
+    const br = logoBox.getBoundingClientRect();
+    boxTop = (br.top - sr.top) - gap * 2;
+    boxBot = (br.bottom - sr.top) + gap * 2;
+    const bl = br.left - sr.left, brt = br.right - sr.left;
+    for (let c = 0; c < COLS; c++)
+      if (cols[c].x < brt && cols[c].x + cols[c].w > bl) boxCols.add(c);
   }
 
-  // recessed (dim) tiles — prefer ones touching the outer columns
-  const edgeIdx = placed.map((_, i) => i).filter(i => placed[i].c === 0 || placed[i].c + placed[i].sw === COLS);
-  const bgSet = new Set(shuffle(edgeIdx.length ? edgeIdx : placed.map((_, i) => i)).slice(0, 2));
-  // foreground tiles that bleed off the top/bottom (must touch that edge)
-  const edgeY = placed.map((_, i) => i).filter(i => !bgSet.has(i) && (placed[i].r === 0 || placed[i].r + placed[i].sh === ROWS));
-  const bleedSet = new Set(shuffle(edgeY).slice(0, 2));
+  // per-column pens, with a small random top stagger so rows don't line up flat
+  const colY = Array.from({ length: COLS }, () => -rand(0, H * 0.06));
 
-  placed.forEach((pl, i) => {
-    const { post, r, c, sw, sh } = pl;
-    const isBg = bgSet.has(i);
+  const n = Math.min(CONFIG.POSTS_PER_SCREEN, posts.length);
+  const bgSet = new Set(shuffle([...Array(n).keys()]).slice(0, 2));   // 2 recessed, for depth
+
+  posts.slice(0, n).forEach((post, i) => {
+    // masonry: drop into the shortest column
+    let col = 0;
+    for (let c = 1; c < COLS; c++) if (colY[c] < colY[col]) col = c;
+
+    const isBg   = bgSet.has(i);
+    const aspect = post.aspect || (post.type === "video" ? 9 / 16 : 4 / 5);
+    // chaos INSIDE the column: vary each post's size, shift it left / right
+    const innerW = cols[col].w - gap;
+    const w = innerW * rand(0.66, 1.0);          // mixture of larger & smaller posts
+    const h = w / aspect;
+    const xJitter = rand(0, innerW - w);         // sits left, right, or anywhere in the column
+
+    const x = cols[col].x + gap / 2 + xJitter;
+    let y = colY[col];
+    if (boxCols.has(col) && colY[col] < boxTop) {
+      y = boxTop - h;                 // first post in a box column sits ABOVE the box (bleeds off top)
+      colY[col] = boxBot + gap;       // the next post in this column goes BELOW the box
+    } else {
+      colY[col] = y + h + gap;        // normal stacking
+    }
+
     const tile = document.createElement("div");
     tile.className = "tile" + (isBg ? " bg" : "");
+    tile.style.left   = x + "px";
+    tile.style.top    = y + "px";
+    tile.style.width  = w + "px";
+    tile.style.height = h + "px";
     tile.style.zIndex = isBg ? "2" : "10";
-    tile.style.animationDelay = (i * 0.05) + "s";
+    tile.style.animationDelay = (i * 0.04) + "s";
 
-    // media wrapper (sharp corners, clipped)
+    // media
     const mbox = document.createElement("div");
     mbox.className = "media";
     let media;
@@ -418,7 +430,7 @@ function buildStage(posts) {
       media.muted = true; media.loop = true;
       media.autoplay = true; media.playsInline = true;
       media.setAttribute("playsinline", "");
-      media.play?.().catch(()=>{});
+      media.play?.().catch(() => {});
     } else {
       media = document.createElement("img");
       media.src = post.src;
@@ -427,51 +439,15 @@ function buildStage(posts) {
     mbox.appendChild(media);
     tile.appendChild(mbox);
 
-    // labels: handle chip + time chip, kept together so they never split
+    // labels: handle chip + time chip, sized to the post
     const ago = timeAgo(post.time);
     const badge = document.createElement("div");
     badge.className = "badge";
     badge.innerHTML =
       `<span class="chip handle-chip">${IG_SVG}<span class="handle">${post.handle}</span></span>` +
       `<span class="chip time-chip"><span class="n">${ago.n}</span>${ago.u ? `<span class="u">${ago.u}</span>` : ""}</span>`;
+    badge.style.fontSize = Math.max(8, Math.min(w * 0.07, 20)) + "px";
     tile.appendChild(badge);
-
-    // the block this tile occupies, then fit the media to its TRUE aspect ratio
-    const bx = c * cellW, by = r * cellH, bw = sw * cellW, bh = sh * cellH;
-    const pad    = isBg ? 0.98 : 0.90;     // consistent gap → structured, less random
-    const touchL = c === 0, touchR = c + sw === COLS;
-    const bX = isBg ? (touchL ? rand(0.12, 0.26) : touchR ? rand(0.72, 0.88) : 0) : 0;
-    const bY = bleedSet.has(i) ? (r === 0 ? rand(0.10, 0.22) : rand(0.78, 0.92)) : 0;
-
-    function fit(aspect) {
-      let tw = bw * pad, th = tw / aspect;
-      if (th > bh * pad) { th = bh * pad; tw = th * aspect; }
-
-      let left;
-      if (isBg && touchL)      left = -tw * bX;                          // bleed off left
-      else if (isBg && touchR) left =  W - tw * bX;                      // bleed off right
-      else  left = Math.max(0, Math.min(bx + (bw - tw) / 2, W - tw));    // centred in block
-
-      let top;
-      if (bY) top = (r === 0) ? -th * bY : H - th * bY;                  // bleed off top/bottom
-      else    top = Math.max(0, Math.min(by + (bh - th) / 2, H - th));   // centred in block
-
-      tile.style.width  = tw + "px";
-      tile.style.height = th + "px";
-      tile.style.left   = left + "px";
-      tile.style.top    = top + "px";
-      // caption + date boxes scale with the post size
-      badge.style.fontSize = Math.max(8, Math.min(tw * 0.085, 22)) + "px";
-    }
-    fit(post.aspect);
-
-    // correct to the media's true aspect ratio once it loads (so nothing crops)
-    const onMeta = () => {
-      const aw = media.naturalWidth  || media.videoWidth;
-      const ah = media.naturalHeight || media.videoHeight;
-      if (aw && ah) fit(aw / ah);
-    };
-    media.addEventListener(post.type === "video" ? "loadedmetadata" : "load", onMeta);
 
     stage.appendChild(tile);
   });
@@ -498,9 +474,9 @@ function ensureLogoBox() {
       wm.className = "logo";
       wm.innerHTML = `<span class="o">o</span>zone<span class="fc">fc</span>`;
       card.insertBefore(wm, card.firstChild);
-      syncBoxWidths();
+      layoutBox();
     };
-    img.addEventListener("load", syncBoxWidths);
+    img.addEventListener("load", layoutBox);
     card.appendChild(img);
   }
   // motto at the bottom
@@ -516,29 +492,56 @@ function placeLogoBox() {
   if (!logoBox) return;
   const screen = document.getElementById("screen");
   const W = screen.clientWidth, H = screen.clientHeight;
-  const cellW = W / GRID.COLS, cellH = H / GRID.ROWS;
-  const bx = LOGO_CELL.c * cellW, by = LOGO_CELL.r * cellH;
-  const bw = LOGO_CELL.w * cellW, bh = LOGO_CELL.h * cellH;
-  const cw = bw * 0.82, ch = Math.min(bh * 0.84, cw * 0.46);   // tighter so logo + motto fill it
-  logoBox.style.width  = cw + "px";
-  logoBox.style.height = ch + "px";
-  logoBox.style.left   = (bx + (bw - cw) / 2) + "px";
-  logoBox.style.top    = (by + (bh - ch) / 2) + "px";
-  syncBoxWidths();
+  const cols = makeCols(W, 0);          // cols 3-4 are identical regardless of the big column
+  const bx = cols[LOGO_CELL.c].x;
+  const bw = cols[LOGO_CELL.c].w + cols[LOGO_CELL.c + 1].w;
+  const cw = bw * 0.97;                 // box width (nearly the full 2 wide columns)
+  logoBox.style.width = cw + "px";
+  logoBox.style.left  = (bx + (bw - cw) / 2) + "px";
+  logoBox._cw = cw; logoBox._H = H;
+  // provisional height so masonry reserves enough before the logo image loads
+  if (!logoBox.style.height) {
+    logoBox.style.height = (cw * 0.50) + "px";
+    logoBox.style.top    = (H / 2 - cw * 0.25) + "px";
+  }
+  layoutBox();
 }
 
-// make the motto the SAME WIDTH as the logo (scale its font, no distortion)
-function syncBoxWidths() {
-  if (!logoBox) return;
+// Size logo + motto so the breathing space is IDENTICAL on all four sides:
+// left = right = top = bottom = the gap between logo & motto (= M).
+function layoutBox() {
+  if (!logoBox || !logoBox._cw) return;
+  const cw = logoBox._cw, H = logoBox._H;
+  const M  = cw * 0.06;                 // uniform breathing space
   const logo  = logoBox.querySelector(".logo-img, .logo");
   const motto = logoBox.querySelector(".motto");
   if (!logo || !motto) return;
-  const T = logo.getBoundingClientRect().width;     // logo's rendered width
-  if (T <= 0) return;                               // image not loaded yet
-  motto.style.fontSize = "";                        // reset to CSS size
+  const logoW = cw * 0.60;              // logo ~60% of the box width (matches the target)
+
+  if (logo.classList.contains("logo-img")) {
+    logo.style.width = logoW + "px";
+    logo.style.height = "auto";
+    if (!logo.getBoundingClientRect().height) return;   // image not loaded yet
+  } else {
+    // wordmark fallback: scale its font so the text width == logoW
+    logo.style.fontSize = "";
+    const lnat = logo.getBoundingClientRect().width;
+    const lF   = parseFloat(getComputedStyle(logo).fontSize) || 16;
+    if (lnat > 0) logo.style.fontSize = (lF * logoW / lnat) + "px";
+  }
+
+  // motto is a smaller tagline beneath the logo (~70% of the logo width, not matched)
+  motto.style.fontSize = "";
   const natW    = motto.getBoundingClientRect().width;
   const natFont = parseFloat(getComputedStyle(motto).fontSize) || 16;
-  if (natW > 0) motto.style.fontSize = (natFont * T / natW) + "px";
+  if (natW > 0) motto.style.fontSize = (natFont * (logoW * 0.70) / natW) + "px";
+
+  // box height so the three vertical gaps each equal M (matches the side margins)
+  const logoH  = logo.getBoundingClientRect().height;
+  const mottoH = motto.getBoundingClientRect().height;
+  const boxH = logoH + mottoH + 3 * M;
+  logoBox.style.height = boxH + "px";
+  logoBox.style.top    = (H / 2 - boxH / 2) + "px";
 }
 
 /* =====================================================================
