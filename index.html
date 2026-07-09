@@ -97,6 +97,8 @@
   /* slow Ken Burns drift on stills, so the wall always feels alive */
   .tile .media img { animation:kenburns 16s ease-in-out forwards; }
   @keyframes kenburns { from { transform:scale(1); } to { transform:scale(1.045); } }
+  /* signage players: skip the drift to spare their GPU */
+  .signage .tile .media img { animation:none; }
 
   /* recessed background tiles: dark image, but the label stays readable */
   .tile.bg .media img, .tile.bg .media video { filter:brightness(0.62); }
@@ -251,6 +253,20 @@ const CONFIG = {
   QR_IMG:            "qr.png",      // QR → https://www.instagram.com/ozonefc.uz
 };
 
+/* --- signage safety ---------------------------------------------------
+   BrightSign & similar players only have 2 hardware video decoders; more
+   simultaneous <video> tags crash them. On such players only 2 tiles play
+   real video — the rest show the video's cover image. Browsers/TVs keep
+   playing everything. Override per screen with ?videos=N in the URL.     */
+const IS_SIGNAGE = /BrightSign|SSSP|Tizen|WebOS.*Signage/i.test(navigator.userAgent);
+const _qsVideos  = (function () {
+  try { return new URLSearchParams(location.search).get("videos"); } catch (e) { return null; }
+})();
+const MAX_VIDEOS = _qsVideos !== null && _qsVideos !== ""
+  ? Math.max(0, parseInt(_qsVideos, 10) || 0)
+  : (IS_SIGNAGE ? 2 : CONFIG.POSTS_PER_SCREEN);
+if (IS_SIGNAGE) document.documentElement.className += " signage";
+
 /* =====================================================================
    2) DATA — fetch from Behold, normalise, filter to last 90 days
    ===================================================================== */
@@ -280,7 +296,7 @@ async function tryFeed(url) {
     if (!res.ok) return null;
     const data = await res.json();
     const raw  = Array.isArray(data) ? data : (data.posts || []);
-    const handle = data?.username ? "@" + data.username : CONFIG.HANDLE;
+    const handle = (data && data.username) ? "@" + data.username : CONFIG.HANDLE;
 
     const posts  = raw.map(p => normalise(p, handle)).filter(Boolean);
     const cutoff = Date.now() - CONFIG.DAYS_WINDOW * 86400000;
@@ -302,7 +318,7 @@ function normalise(p, handle) {
   let w = 0, h = 0;
   const s = p.sizes || {};
   const pick = s.full || s.large || s.medium || s.small;
-  if (pick?.width && pick?.height) { w = pick.width; h = pick.height; }
+  if (pick && pick.width && pick.height) { w = pick.width; h = pick.height; }
   else if (p.width && p.height)    { w = p.width;    h = p.height;    }
 
   return {
@@ -407,6 +423,7 @@ function buildStage(posts) {
 
   const n = Math.min(CONFIG.POSTS_PER_SCREEN, posts.length);
   const bgSet = new Set(shuffle([...Array(n).keys()]).slice(0, 2));   // 2 recessed, for depth
+  let vidBudget = MAX_VIDEOS;          // how many tiles may autoplay real video
 
   posts.slice(0, n).forEach((post, i) => {
     // masonry: drop into the shortest column
@@ -438,18 +455,24 @@ function buildStage(posts) {
     tile.style.zIndex = isBg ? "2" : "10";
     tile.style.animationDelay = (i * 0.08) + "s";   // incoming cascade
 
-    // media
+    // media — only vidBudget posts get a real <video>; signage players have
+    // few hardware decoders, so the rest show the video's cover image instead
     const mbox = document.createElement("div");
     mbox.className = "media";
     let media;
-    if (post.type === "video") {
+    if (post.type === "video" && vidBudget > 0) {
+      vidBudget--;
       media = document.createElement("video");
       media.src = post.src;
       if (post.poster) media.poster = post.poster;
       media.muted = true; media.loop = true;
       media.autoplay = true; media.playsInline = true;
       media.setAttribute("playsinline", "");
-      media.play?.().catch(() => {});
+      if (media.play) { const pr = media.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    } else if (post.type === "video") {
+      media = document.createElement("img");        // cover image stand-in
+      media.src = post.poster || "";
+      media.loading = "eager";
     } else {
       media = document.createElement("img");
       media.src = post.src;
@@ -652,7 +675,22 @@ async function refreshPool() {
   if (p && p.length) ALL = p;          // swap in fresh posts + non-expired media URLs
 }
 
+// 16:9 sizing fallback for engines without CSS aspect-ratio / min()
+// (older BrightSign firmware) — computes the screen box in JS instead
+function sizeScreen() {
+  let ok = false;
+  try {
+    ok = window.CSS && CSS.supports("aspect-ratio", "16 / 9") && CSS.supports("width", "min(1px, 2px)");
+  } catch (e) { ok = false; }
+  if (ok) return;
+  const s = document.getElementById("screen");
+  const w = Math.min(window.innerWidth, window.innerHeight * 16 / 9);
+  s.style.width  = w + "px";
+  s.style.height = (w * 9 / 16) + "px";
+}
+
 async function start() {
+  sizeScreen();
   await refreshPool();
   const status = document.getElementById("status");
   setTimeout(() => status && status.remove(), 3000);
@@ -670,7 +708,7 @@ async function start() {
 let rT;
 window.addEventListener("resize", () => {
   clearTimeout(rT);
-  rT = setTimeout(() => { placeLogoBox(); if (current) { cursor = Math.max(0, cursor - CONFIG.POSTS_PER_SCREEN); nextScreen(); } }, 400);
+  rT = setTimeout(() => { sizeScreen(); placeLogoBox(); if (current) { cursor = Math.max(0, cursor - CONFIG.POSTS_PER_SCREEN); nextScreen(); } }, 400);
 });
 
 start();
