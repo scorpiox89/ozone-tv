@@ -97,8 +97,11 @@
   /* slow Ken Burns drift on stills, so the wall always feels alive */
   .tile .media img { animation:kenburns 16s ease-in-out forwards; }
   @keyframes kenburns { from { transform:scale(1); } to { transform:scale(1.045); } }
-  /* signage players: skip the drift to spare their GPU */
+  /* signage players: skip the drift + heavy shadow/filter work to spare their GPU */
   .signage .tile .media img { animation:none; }
+  .signage .tile .media { box-shadow:none; }
+  .signage .hashcard { box-shadow:none; }
+  .signage .qrcard img { filter:none; }
 
   /* recessed background tiles: dark image, but the label stays readable */
   .tile.bg .media img, .tile.bg .media video { filter:brightness(0.62); }
@@ -258,10 +261,16 @@ const CONFIG = {
    simultaneous <video> tags crash them. On such players only 2 tiles play
    real video — the rest show the video's cover image. Browsers/TVs keep
    playing everything. Override per screen with ?videos=N in the URL.     */
-const IS_SIGNAGE = /BrightSign|SSSP|Tizen|WebOS.*Signage/i.test(navigator.userAgent);
-const _qsVideos  = (function () {
-  try { return new URLSearchParams(location.search).get("videos"); } catch (e) { return null; }
+const _qs = (function () {
+  try { return new URLSearchParams(location.search); } catch (e) { return { get: function () { return null; } }; }
 })();
+// force signage mode with ?signage=1 (some players don't identify themselves in the UA)
+const IS_SIGNAGE = _qs.get("signage") === "1" ||
+                   /BrightSign|SSSP|Tizen|WebOS.*Signage/i.test(navigator.userAgent);
+// ?posts=N caps tiles per screen (fewer tiles = less memory/GPU on weak players)
+const _qsPosts = parseInt(_qs.get("posts"), 10);
+if (_qsPosts > 0) CONFIG.POSTS_PER_SCREEN = _qsPosts;
+const _qsVideos = _qs.get("videos");
 const MAX_VIDEOS = _qsVideos !== null && _qsVideos !== ""
   ? Math.max(0, parseInt(_qsVideos, 10) || 0)
   : (IS_SIGNAGE ? 2 : CONFIG.POSTS_PER_SCREEN);
@@ -633,7 +642,14 @@ function nextScreen() {
       t.style.animation = "fadeOut 0.5s ease forwards";
       t.style.animationDelay = (k * 0.06) + "s";
     });
-    setTimeout(() => prev.remove(), 600 + tiles.length * 60 + 300);
+    setTimeout(() => {
+      // release hardware decoders BEFORE removal — embedded players (BrightSign)
+      // crash when old <video> elements keep decoders until garbage collection
+      prev.querySelectorAll("video").forEach(v => {
+        try { v.pause(); v.removeAttribute("src"); v.load(); } catch (e) {}
+      });
+      prev.remove();
+    }, 600 + tiles.length * 60 + 300);
   }
   preloadUpcoming();                   // warm the cache for the next rotation
 }
@@ -661,7 +677,7 @@ function fitBadges(stage) {
 // warm the browser cache for the UPCOMING screen (images + video posters),
 // so the next rotation arrives fully rendered instead of popping in blank
 function preloadUpcoming() {
-  if (!ALL.length) return;
+  if (!ALL.length || IS_SIGNAGE) return;   // skip on signage — keep memory low
   const n = Math.min(CONFIG.POSTS_PER_SCREEN, ALL.length);
   for (let k = 0; k < n; k++) {
     const p = ALL[(cursor + k) % ALL.length];
@@ -702,6 +718,9 @@ async function start() {
   nextScreen();
   setInterval(nextScreen, CONFIG.ROTATE_MS);
   if (CONFIG.REFRESH_MIN) setInterval(refreshPool, CONFIG.REFRESH_MIN * 60000);
+  // kiosk hygiene: full page reload once a day → picks up new index.html
+  // versions automatically and clears any accumulated browser memory
+  setTimeout(() => location.reload(), 24 * 3600 * 1000);
 }
 
 // rebuild current screen on resize so it always fills the TV
