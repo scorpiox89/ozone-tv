@@ -1,0 +1,87 @@
+name: Render wall video (BrightSign)
+
+# Renders the live HTML wall in a real Chrome inside a virtual display,
+# screen-records ~60 seconds of it, and publishes:
+#   wall-<stamp>.mp4  +  feed.xml   (single-item Media RSS)
+# on the orphan "feed" branch. A BrightSign "Live Feed" widget pointed at
+#   https://raw.githubusercontent.com/<owner>/<repo>/feed/feed.xml
+# plays the current video natively and re-downloads whenever a new render
+# is published (the filename changes every run, so updates are guaranteed).
+
+on:
+  schedule:
+    - cron: "0 3 * * *"        # daily at 03:00 UTC — timestamps stay fresh
+  workflow_dispatch: {}         # run manually from the Actions tab
+
+permissions:
+  contents: write
+
+env:
+  # ?videos=6 → 6 tiles play real video, the rest show covers (CI machines
+  # are modest; raise later if the recording looks smooth)
+  PAGE_URL: "https://scorpiox89.github.io/ozone-tv/?videos=6"
+  RECORD_SECONDS: "62"          # ~4 slide rotations at 15s
+  WARMUP_SECONDS: "25"          # let images/videos load before recording
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
+
+      - name: Start virtual 1080p display
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 2
+
+      - name: Open the wall in Chrome
+        run: |
+          google-chrome --no-first-run --no-default-browser-check --no-sandbox \
+            --autoplay-policy=no-user-gesture-required \
+            --kiosk --window-position=0,0 --window-size=1920,1080 \
+            --user-data-dir=/tmp/kiosk "$PAGE_URL" &
+          sleep "$WARMUP_SECONDS"
+
+      - name: Record the screen
+        run: |
+          ffmpeg -y -f x11grab -draw_mouse 0 -video_size 1920x1080 -framerate 30 -i :99 \
+            -t "$RECORD_SECONDS" -an \
+            -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \
+            -movflags +faststart wall.mp4
+          ls -la wall.mp4
+
+      - name: Build + publish the feed branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STAMP=$(date -u +%Y%m%d%H%M)
+          mkdir -p _feed
+          mv wall.mp4 "_feed/wall-$STAMP.mp4"
+          cat > _feed/feed.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+            <channel>
+              <title>Ozone FC — Instagram Wall</title>
+              <link>https://www.instagram.com/ozonefc.uz</link>
+              <description>Rendered collage loop</description>
+              <ttl>60</ttl>
+              <item>
+                <title>ozone-wall-$STAMP</title>
+                <pubDate>$(date -u -R)</pubDate>
+                <guid isPermaLink="false">wall-$STAMP</guid>
+                <media:content url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/feed/wall-$STAMP.mp4" type="video/mp4" medium="video"/>
+              </item>
+            </channel>
+          </rss>
+          EOF
+          cd _feed
+          git init -b feed
+          git config user.name  "feed-bot"
+          git config user.email "feed-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "wall video $STAMP"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" feed
