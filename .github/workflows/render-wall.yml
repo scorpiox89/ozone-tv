@@ -27,10 +27,12 @@ jobs:
   render:
     runs-on: ubuntu-latest
     steps:
-      - name: Install virtual display
+      - name: Install virtual display + encoder
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb
+          sudo apt-get install -y -qq xvfb ffmpeg x11-utils
+          ffmpeg -version | head -1
+          google-chrome --version
 
       - name: Start virtual 1080p display
         run: |
@@ -48,7 +50,9 @@ jobs:
 
       - name: Record the screen
         run: |
-          ffmpeg -y -f x11grab -draw_mouse 0 -video_size 1920x1080 -framerate 30 -i :99 \
+          xdpyinfo -display :99 | head -3          # confirm the display is alive
+          ffmpeg -y -loglevel warning -f x11grab -draw_mouse 0 \
+            -video_size 1920x1080 -framerate 30 -i :99 \
             -t "$RECORD_SECONDS" -an \
             -c:v libx264 -preset veryfast -crf 23 -pix_fmt yuv420p \
             -movflags +faststart wall.mp4
