@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Ozone FC — Instagram Wall</title>
+    <link>https://www.instagram.com/ozonefc.uz</link>
+    <description>Rendered collage loop</description>
+    <ttl>60</ttl>
+    <item>
+      <title>ozone-wall-202607240546</title>
+      <pubDate>Fri, 24 Jul 2026 05:46:24 +0000</pubDate>
+      <guid isPermaLink="false">wall-202607240546</guid>
+      <media:content url="https://raw.githubusercontent.com/scorpiox89/ozone-tv/feed/wall-202607240546.mp4" type="video/mp4" medium="video"/>
+    </item>
+  </channel>
+</rss>
